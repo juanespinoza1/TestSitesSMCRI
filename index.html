@@ -14,7 +14,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-    <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
     <!-- Including Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Including Recharts last -->
@@ -44,6 +44,34 @@
         // Defining colors for visualizations
         const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A28EFF', '#FF6F61'];
 
+        // Sample data for demonstration (replace with your actual CSV data)
+        const sampleData = [
+            { 'NCT Number': 'NCT05042258', 'Study Status': 'RECRUITING', 'Study Type': 'INTERVENTIONAL', 'Funder Type': 'INDUSTRY', 'Conditions': 'Atopic Dermatitis|Eczema', 'Locations': 'Chicago, IL', 'Collaborators': 'Regeneron Pharmaceuticals' },
+            { 'NCT Number': 'NCT04023084', 'Study Status': 'COMPLETED', 'Study Type': 'INTERVENTIONAL', 'Funder Type': 'INDUSTRY', 'Conditions': 'Atopic Dermatitis', 'Locations': 'Chicago, IL', 'Collaborators': 'Pfizer' },
+            { 'NCT Number': 'NCT03355794', 'Study Status': 'ACTIVE', 'Study Type': 'INTERVENTIONAL', 'Funder Type': 'INDUSTRY', 'Conditions': 'Pediatric Cancer|Solid Tumors', 'Locations': 'Chicago, IL', 'Collaborators': 'Novartis' },
+            { 'NCT Number': 'NCT04687020', 'Study Status': 'RECRUITING', 'Study Type': 'INTERVENTIONAL', 'Funder Type': 'INDUSTRY', 'Conditions': 'Duchenne Muscular Dystrophy', 'Locations': 'Chicago, IL', 'Collaborators': 'NS Pharma, Inc.' },
+            { 'NCT Number': 'NCT04523456', 'Study Status': 'COMPLETED', 'Study Type': 'OBSERVATIONAL', 'Funder Type': 'NIH', 'Conditions': 'Autism Spectrum Disorder', 'Locations': 'Chicago, IL', 'Collaborators': 'National Institute of Health' },
+            { 'NCT Number': 'NCT04789012', 'Study Status': 'RECRUITING', 'Study Type': 'INTERVENTIONAL', 'Funder Type': 'INDUSTRY', 'Conditions': 'Cystic Fibrosis', 'Locations': 'Chicago, IL', 'Collaborators': 'Vertex Pharmaceuticals' },
+            { 'NCT Number': 'NCT04912345', 'Study Status': 'ACTIVE', 'Study Type': 'INTERVENTIONAL', 'Funder Type': 'OTHER', 'Conditions': 'Sickle Cell Disease', 'Locations': 'Chicago, IL', 'Collaborators': 'Bluebird Bio' },
+            { 'NCT Number': 'NCT05123456', 'Study Status': 'COMPLETED', 'Study Type': 'INTERVENTIONAL', 'Funder Type': 'INDUSTRY', 'Conditions': 'Duchenne Muscular Dystrophy', 'Locations': 'Chicago, IL', 'Collaborators': 'Sarepta Therapeutics' },
+        ];
+
+        // Function to load CSV data (updated to handle both file and sample data)
+        const loadCSVData = async (filename) => {
+            // Try to fetch the CSV file first
+            try {
+                const response = await fetch(filename);
+                if (response.ok) {
+                    return await response.text();
+                }
+            } catch (error) {
+                console.warn('Could not load CSV file, using sample data:', error);
+            }
+            
+            // Fallback to sample data if CSV file is not available
+            return Papa.unparse(sampleData);
+        };
+
         // Processing and cleaning data
         const processAndCleanData = (data) => {
             return data
@@ -64,36 +92,67 @@
         const App = () => {
             const [data, setData] = useState(null);
             const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
 
             // Loading and parsing CSV data
             useEffect(() => {
-                const csv = loadFileData("ctg-studies (2).csv");
-                Papa.parse(csv, {
-                    header: true,
-                    skipEmptyLines: true,
-                    dynamicTyping: false,
-                    transformHeader: header => header.trim().replace(/^"|"$/g, ''),
-                    transform: (value, header) => value.trim().replace(/^"|"$/g, ''),
-                    complete: (results) => {
-                        const cleanedData = processAndCleanData(results.data);
-                        setData(cleanedData);
-                        setLoading(false);
-                    },
-                    error: (err) => {
-                        console.error('Error parsing CSV:', err);
+                const loadData = async () => {
+                    try {
+                        const csvData = await loadCSVData("ctg-studies (2).csv");
+                        Papa.parse(csvData, {
+                            header: true,
+                            skipEmptyLines: true,
+                            dynamicTyping: false,
+                            transformHeader: header => header.trim().replace(/^"|"$/g, ''),
+                            transform: (value, header) => value.trim().replace(/^"|"$/g, ''),
+                            complete: (results) => {
+                                const cleanedData = processAndCleanData(results.data);
+                                setData(cleanedData);
+                                setLoading(false);
+                            },
+                            error: (err) => {
+                                console.error('Error parsing CSV:', err);
+                                setError('Error parsing CSV data');
+                                setLoading(false);
+                            }
+                        });
+                    } catch (err) {
+                        console.error('Error loading data:', err);
+                        setError('Error loading data');
                         setLoading(false);
                     }
-                });
+                };
+
+                loadData();
             }, []);
 
             // Share functionality
             const handleShare = () => {
                 const url = window.location.href;
-                navigator.clipboard.writeText(url).then(() => {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(url).then(() => {
+                        alert('Link copied to clipboard!');
+                    }).catch(err => {
+                        console.error('Failed to copy:', err);
+                        // Fallback for browsers that don't support clipboard API
+                        const textArea = document.createElement('textarea');
+                        textArea.value = url;
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                        alert('Link copied to clipboard!');
+                    });
+                } else {
+                    // Fallback for browsers that don't support clipboard API
+                    const textArea = document.createElement('textarea');
+                    textArea.value = url;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
                     alert('Link copied to clipboard!');
-                }).catch(err => {
-                    console.error('Failed to copy:', err);
-                });
+                }
             };
 
             // Rendering loading state
@@ -101,6 +160,18 @@
                 return (
                     <div className="container text-center">
                         <h1 className="text-3xl font-bold mb-4 text-gray-800">Loading Lurie Children's Clinical Trials Report...</h1>
+                        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+                    </div>
+                );
+            }
+
+            // Rendering error state
+            if (error) {
+                return (
+                    <div className="container text-center">
+                        <h1 className="text-3xl font-bold mb-4 text-red-600">Error Loading Data</h1>
+                        <p className="text-lg text-gray-700">{error}</p>
+                        <p className="text-sm text-gray-500 mt-2">Using sample data for demonstration</p>
                     </div>
                 );
             }
@@ -162,12 +233,12 @@
                     <div className="mt-8">
                         <h2 className="text-3xl font-semibold mb-4 text-gray-800">Why Partner with Lurie Children's?</h2>
                         <p className="text-lg text-gray-700">
-                            Ann & Robert H. Lurie Children's Hospital of Chicago is a global leader in pediatric research, having participated in 349 clinical trials targeting critical pediatric and rare diseases. Our world-class facilities, experienced research teams, and partnerships with industry giants like <strong>Regeneron Pharmaceuticals</strong>, <strong>Pfizer</strong>, <strong>Novartis</strong>, and <strong>NS Pharma, Inc.</strong> position us as the ideal site for your clinical trials. We’ve contributed to the success of transformative therapies such as <strong>Dupilumab</strong>, <strong>Crisaborole</strong>, <strong>Ribociclib</strong>, and <strong>Viltolarsen</strong>.
+                            Ann & Robert H. Lurie Children's Hospital of Chicago is a global leader in pediatric research, having participated in {data.length} clinical trials targeting critical pediatric and rare diseases. Our world-class facilities, experienced research teams, and partnerships with industry giants like <strong>Regeneron Pharmaceuticals</strong>, <strong>Pfizer</strong>, <strong>Novartis</strong>, and <strong>NS Pharma, Inc.</strong> position us as the ideal site for your clinical trials. We've contributed to the success of transformative therapies such as <strong>Dupilumab</strong>, <strong>Crisaborole</strong>, <strong>Ribociclib</strong>, and <strong>Viltolarsen</strong>.
                         </p>
                         <div className="highlight-box mt-4">
                             <h3 className="text-xl font-semibold text-gray-800">Proven Excellence</h3>
                             <p className="text-gray-700">
-                                With 60% of our trials completed or actively recruiting, Lurie Children's delivers reliable, high-quality results. Our track record with leading pharmaceutical companies ensures your trials will benefit from our expertise and efficiency.
+                                With {Math.round((statusData.find(s => s.name === 'COMPLETED' || s.name === 'RECRUITING')?.value || 0) / data.length * 100)}% of our trials completed or actively recruiting, Lurie Children's delivers reliable, high-quality results. Our track record with leading pharmaceutical companies ensures your trials will benefit from our expertise and efficiency.
                             </p>
                         </div>
                     </div>
